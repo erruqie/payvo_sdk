@@ -7,14 +7,14 @@ MERCHANT_KEY = "test_secret_key"
 
 def test_sdk_initialization():
     """Проверка инициализации SDK"""
-    sdk = Payvo(MERCHANT_ID, MERCHANT_KEY, test_mode=True)
+    sdk = Payvo(MERCHANT_ID, MERCHANT_KEY)
     assert sdk.merchant_id == MERCHANT_ID
     assert sdk.secret_key == MERCHANT_KEY
-    assert sdk.base_url.endswith("sandbox.payvo.ru/public/")
+    assert sdk.base_url.endswith("api.payvo.ru/public/")
 
 def test_create_payment_structure():
     """Проверка структуры ответа при создании платежа (mock)"""
-    sdk = Payvo(MERCHANT_ID, MERCHANT_KEY, test_mode=True)
+    sdk = Payvo(MERCHANT_ID, MERCHANT_KEY)
     
     # Здесь можно использовать mock, если нет реального API
     # Пример простой проверки структуры

@@ -3,12 +3,11 @@ from typing import Optional
 
 class Payvo:
     PRODUCTION_URL = "https://api.payvo.ru/public/"
-    TEST_URL = "https://sandbox.payvo.ru/public/"
 
-    def __init__(self, merchant_id: str, merchant_secret_key: str, test_mode: bool = False):
+    def __init__(self, merchant_id: str, merchant_secret_key: str):
         self.merchant_id = merchant_id
         self.secret_key = merchant_secret_key
-        self.base_url = self.TEST_URL if test_mode else self.PRODUCTION_URL
+        self.base_url = self.PRODUCTION_URL
         self.headers = {
             "Content-Type": "application/json",
             "merchant-id": self.merchant_id,
