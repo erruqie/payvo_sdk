@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="payvo_sdk",
-    version="0.0.3",
+    version="0.1.0",
     author="erruqie",
     author_email="clownl3ss@icloud.com",
     description="Python SDK для работы с Payvo API",

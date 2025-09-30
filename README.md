@@ -44,7 +44,7 @@ print(payment)
 ### Получение информации о платеже
 
 ```python
-info = payvo.get_payment(payment_uuid=payment["uuid"])
+info = payvo.get_payment(payment_uuid=payment["payment"]["uuid"])
 print(info)
 ```
 
@@ -56,7 +56,7 @@ print(info)
 
 ```python
 refund = payvo.create_refund(
-    payment_uuid=payment["uuid"],
+    payment_uuid=payment["payment"]["uuid"],
     amount=50.0,
     description="Частичный возврат"
 )
@@ -118,11 +118,23 @@ payvo = Payvo(
     merchant_secret_key="ваш_secret_key"
 )
 
+# Список товаров (если включены Payvo.Чеки)
+items = [
+    {"description": "Товар 1", "amount": 42.80, "vat_code": 1, "quantity": 1},
+    {"description": "Товар 2", "amount": 15.50, "vat_code": 2, "quantity": 2}
+]
+
 # Создать платеж
-payment = payvo.create_payment(200.0, "Тестовый платеж")
+payment = payvo.create_payment(
+    amount=58.30,  # общая сумма, для поля amount
+    description="Заказ №1",
+    return_url="https://www.example.com/return_url",
+    email="user@example.com",
+    items=items
+)
 
 # Проверка платежа
-info = payvo.get_payment(payment["uuid"])
+info = payvo.get_payment(payment["payment"]["uuid"])
 
 # Частичный возврат
 refund = payvo.create_refund(payment["uuid"], 50.0, "Частичный возврат")
