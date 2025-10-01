@@ -1,10 +1,11 @@
-import requests
-from typing import Optional
+import aiohttp
+import asyncio
 import logging
+from typing import Optional
 
 # Настройка логирования
 logger = logging.getLogger("PayvoSDK")
-logger.setLevel(logging.DEBUG)  # Можно менять на INFO для меньше подробностей
+logger.setLevel(logging.DEBUG)
 handler = logging.StreamHandler()
 formatter = logging.Formatter("[%(asctime)s] %(levelname)s - %(message)s")
 handler.setFormatter(formatter)
@@ -23,24 +24,26 @@ class Payvo:
             "merchant-id": self.merchant_id,
             "merchant-secret-key": self.secret_key
         }
+        self.session: Optional[aiohttp.ClientSession] = None
 
-    def create_payment(self, amount: float, description: str,
-                    return_url: str,
-                    email: str = None,
-                    items: list[dict] = None,
-                    payment_method_type: str = None,
-                    extra: Optional[dict] = None):
-        """
-        Создаёт платёж в Payvo с поддержкой receipt.
-        :param amount: сумма в рублях (float)
-        :param description: описание платежа (для платежа)
-        :param return_url: URL редиректа
-        :param email: email покупателя (для receipt)
-        :param items: список товаров для receipt, каждый словарь должен содержать:
-                    'description', 'amount' (рубли), 'vat_code', 'quantity'
-        :param payment_method_type: тип оплаты (необязательно)
-        :param extra: дополнительные поля API
-        """
+    async def __aenter__(self):
+        self.session = aiohttp.ClientSession(headers=self.headers)
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        if self.session:
+            await self.session.close()
+
+    async def create_payment(
+        self,
+        amount: float,
+        description: str,
+        return_url: str,
+        email: str = None,
+        items: list[dict] = None,
+        payment_method_type: str = None,
+        extra: Optional[dict] = None
+    ):
         if not return_url:
             raise ValueError("return_url обязателен")
 
@@ -59,15 +62,15 @@ class Payvo:
             data["payment_method_type"] = payment_method_type
 
         if email and items:
-            # конвертируем amount каждого товара в копейки
-            receipt_items = []
-            for item in items:
-                receipt_items.append({
+            receipt_items = [
+                {
                     "description": item["description"],
                     "amount": int(round(item["amount"] * 100)),
                     "vat_code": item["vat_code"],
                     "quantity": item["quantity"]
-                })
+                }
+                for item in items
+            ]
             data["receipt"] = {
                 "customer": {"email": email},
                 "items": receipt_items
@@ -79,67 +82,71 @@ class Payvo:
         logger.debug("Создание платежа: %s", data)
 
         try:
-            resp = requests.post(f"{self.base_url}payments", json=data, headers=self.headers)
-            resp.raise_for_status()
-            logger.info("Платеж успешно создан: %s", resp.json())
-            return resp.json()
-        except requests.exceptions.HTTPError as e:
-            logger.error("HTTPError при создании платежа: %s %s", e.response.status_code, e.response.text)
-            raise
-        except requests.exceptions.RequestException as e:
+            async with self.session.post(f"{self.base_url}payments", json=data) as resp:
+                text = await resp.text()
+                if resp.status >= 400:
+                    logger.error("HTTPError при создании платежа: %s %s", resp.status, text)
+                    resp.raise_for_status()
+                result = await resp.json()
+                logger.info("Платеж успешно создан: %s", result)
+                return result
+        except Exception as e:
             logger.error("Ошибка запроса при создании платежа: %s", str(e))
             raise
 
-    def get_payment(self, payment_uuid: str):
+    async def get_payment(self, payment_uuid: str):
         logger.debug("Получение информации о платеже: %s", payment_uuid)
         try:
-            resp = requests.get(f"{self.base_url}payments/{payment_uuid}", headers=self.headers)
-            resp.raise_for_status()
-            logger.info("Информация о платеже: %s", resp.json())
-            return resp.json()
-        except requests.exceptions.HTTPError as e:
-            logger.error("HTTPError при получении платежа: %s %s", e.response.status_code, e.response.text)
-            raise
-        except requests.exceptions.RequestException as e:
+            async with self.session.get(f"{self.base_url}payments/{payment_uuid}") as resp:
+                text = await resp.text()
+                if resp.status >= 400:
+                    logger.error("HTTPError при получении платежа: %s %s", resp.status, text)
+                    resp.raise_for_status()
+                result = await resp.json()
+                logger.info("Информация о платеже: %s", result)
+                return result
+        except Exception as e:
             logger.error("Ошибка запроса при получении платежа: %s", str(e))
             raise
 
-    def create_refund(self, payment_uuid: str, amount: float, description: Optional[str] = None):
+    async def create_refund(self, payment_uuid: str, amount: float, description: Optional[str] = None):
         data = {"payment_uuid": payment_uuid, "amount": amount, "description": description}
         logger.debug("Создание возврата: %s", data)
         try:
-            resp = requests.post(f"{self.base_url}refunds", json=data, headers=self.headers)
-            resp.raise_for_status()
-            logger.info("Возврат успешно создан: %s", resp.json())
-            return resp.json()
-        except requests.exceptions.HTTPError as e:
-            logger.error("HTTPError при создании возврата: %s %s", e.response.status_code, e.response.text)
-            raise
-        except requests.exceptions.RequestException as e:
+            async with self.session.post(f"{self.base_url}refunds", json=data) as resp:
+                text = await resp.text()
+                if resp.status >= 400:
+                    logger.error("HTTPError при создании возврата: %s %s", resp.status, text)
+                    resp.raise_for_status()
+                result = await resp.json()
+                logger.info("Возврат успешно создан: %s", result)
+                return result
+        except Exception as e:
             logger.error("Ошибка запроса при создании возврата: %s", str(e))
             raise
 
-    def get_refund(self, refund_uuid: str):
+    async def get_refund(self, refund_uuid: str):
         logger.debug("Получение информации о возврате: %s", refund_uuid)
         try:
-            resp = requests.get(f"{self.base_url}refunds/{refund_uuid}", headers=self.headers)
-            resp.raise_for_status()
-            logger.info("Информация о возврате: %s", resp.json())
-            return resp.json()
-        except requests.exceptions.HTTPError as e:
-            logger.error("HTTPError при получении возврата: %s %s", e.response.status_code, e.response.text)
-            raise
-        except requests.exceptions.RequestException as e:
+            async with self.session.get(f"{self.base_url}refunds/{refund_uuid}") as resp:
+                text = await resp.text()
+                if resp.status >= 400:
+                    logger.error("HTTPError при получении возврата: %s %s", resp.status, text)
+                    resp.raise_for_status()
+                result = await resp.json()
+                logger.info("Информация о возврате: %s", result)
+                return result
+        except Exception as e:
             logger.error("Ошибка запроса при получении возврата: %s", str(e))
             raise
 
-    def create_autopayment(self, customer_id: str, amount: float, description: str, save_payment_method: bool = True):
+    async def create_autopayment(self, customer_id: str, amount: float, description: str, save_payment_method: bool = True):
         logger.debug("Создание автоплатежа для клиента: %s", customer_id)
         try:
-            return self.create_payment(
+            return await self.create_payment(
                 amount=amount,
                 description=description,
-                return_url="https://example.com/return",  # Можно сделать параметром метода
+                return_url="https://example.com/return",
                 extra={"merchant_customer_id": customer_id, "save_payment_method": save_payment_method}
             )
         except Exception as e:
@@ -149,3 +156,20 @@ class Payvo:
     @staticmethod
     def verify_webhook(data: dict, secret_key: str) -> bool:
         return data.get("secret_key") == secret_key
+
+
+# Пример использования
+async def main():
+    async with Payvo("merchant_id", "merchant_secret_key") as client:
+        payment = await client.create_payment(
+            amount=100.0,
+            description="Тестовый платеж",
+            return_url="https://example.com/success",
+            email="test@example.com",
+            items=[{"description": "Товар 1", "amount": 100.0, "vat_code": 1, "quantity": 1}]
+        )
+        print(payment)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
